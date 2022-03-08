@@ -1,5 +1,5 @@
 Metrics/LineLength:
-  Max: 120
+  Max: 100
 
 Style/AndOr:
   Enabled: false
@@ -32,8 +32,5 @@ Style/StringLiterals:
 Style/DotPosition:
   EnforcedStyle: trailing
 
-Rails/TimeZone:
-  Enabled: false
-
 Metrics/ClassLength:
-  Max: 120
+  Max: 100

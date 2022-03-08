@@ -92,6 +92,8 @@ GEM
       unicode-display_width (>= 1.4.0, < 3.0)
     rubocop-ast (1.16.0)
       parser (>= 3.1.1.0)
+    rubocop-rspec (2.9.0)
+      rubocop (~> 1.19)
     ruby-progressbar (1.11.0)
     shellany (0.0.1)
     simplecov (0.13.0)
@@ -119,6 +121,7 @@ DEPENDENCIES
   guard-rspec
   guard-rubocop
   rspec
+  rubocop-rspec
   webmock
 
 RUBY VERSION

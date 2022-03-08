@@ -2,6 +2,7 @@ source 'https://rubygems.org'
 ruby '2.6.8'
 
 gem 'activesupport'
+gem 'rubocop-rspec', require: false
 
 group :development do
   gem 'guard-rspec', require: false
