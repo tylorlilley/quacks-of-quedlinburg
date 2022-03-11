@@ -6,20 +6,26 @@ Launch irb with the necessary classes required:
 irb -r ./app/game.rb
 ```
 
-Then, set up and run a simulation by creating an ingredient set and one or more players to start the game with:
+Then, set up and run a simulation by creating an ingredient set and one or more players, like this:
 
 ```
-traits = [:vocal, :buys_red_chips, :buys_orange_chips, :never_rolls_die, :buys_multiple_if_able]
-player = Player.new(1.0, traits)
+player = SetOneRedPlayer.new(1.0)
+player2 = SetOneRedPlayer.new(5.0)
+player3 = SetOneRedPlayer.new(20.0)
+player4 = SetOneRedPlayer.new(50.0)
 ingredient_set = IngredientSetOne.new
-game = Game.new(ingredient_set, [player])
-game.run
 ```
 
-To run multiple games and get statistics about the results, do this:
+Then, run through a game like this:
 
 ```
+Game.new(ingredient_set, [player, player2, player3, player4]).run
+```
 
+Or, to run multiple games and get statistics about the results, do this:
+
+```
+Simulation.new(ingredient_set, [player, player2, player3, player4], 10).run
 ```
 
 # Usage

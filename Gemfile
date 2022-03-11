@@ -2,6 +2,8 @@ source 'https://rubygems.org'
 ruby '2.6.8'
 
 gem 'activesupport'
+gem 'enumerable-statistics'
+gem 'pry', require: false
 gem 'rubocop-rspec', require: false
 
 group :development do

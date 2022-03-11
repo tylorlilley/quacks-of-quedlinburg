@@ -118,18 +118,23 @@ class Player
     reset_distance
   end
 
+  def add_rats(max_points)
+    return if victory_points == max_points
+
+    vocalize 'Checking for rats...'
+    vocalize "- My score is #{victory_points}."
+    vocalize "- Max score of any player is #{max_points}."
+    rats_received = Game::RAT_TAIL_POSITIONS.count do |rat|
+      rat > victory_points && rat < max_points
+    end
+    vocalize "- Receiving #{rats_received} rats."
+    add_distance rats_received
+  end
+
   def stir
     vocalize 'Stirring...'
     use_flask_or_chip(draw_chip) until stop_drawing?
-    if exploded?
-      vocalize '-- Pot exploded; Stopped drawing.'
-    elsif bag.empty?
-      vocalize '-- Empty bag; Stopped drawing.'
-    elsif at_edge_of_board?
-      vocalize '-- Maxed out board; Stopped drawing.'
-    else
-      vocalize '-- Decided to stop drawing due to risk tolerance.'
-    end
+    vocalize_reason_for_stopping
     distance
   end
 
@@ -184,7 +189,7 @@ class Player
   end
 
   def collect_victory_points
-    # TODO: Decide better when to skip if exploded
+    # TODO: Decide better when to skip this to buy chips instead if exploded
     return if exploded? && game.turn_number < 9
 
     vocalize 'Checking for victory points...'
@@ -192,29 +197,62 @@ class Player
   end
 
   def buy_chips
-    # TODO: Decide when to skip if exploded
+    # TODO: Decide when to skip this to collect points instead if exploded
     return if game.turn_number >= 9
 
     coins_to_spend = coins
     first_chip_color = nil
-    (1..2).each do |_i|
+    selections = make_multiple_chip_selections
+    (0..1).each do |i|
       vocalize "Buying Chips with #{coins_to_spend}..."
-      selection = available_purchase_options(coins_to_spend, first_chip_color).max_by { |_chip, cost| cost }
-      # TODO: implement :buys_multiple_if_able trait
-      unless selection.nil?
-        coins_to_spend -= selection[1]
-        first_chip_color = selection.first[:color]
-        add_chip(selection.first)
-      end
+      selection = selections[i] || make_single_chip_selection(coins_to_spend, first_chip_color)
+
+      next if selection.nil?
+
+      coins_to_spend -= selection[1]
+      first_chip_color = selection.first[:color]
+      add_chip(selection.first)
     end
   end
 
-  def available_purchase_options(coins_to_spend, forbidden_color)
+  def make_single_chip_selection(coins_to_spend, first_chip_color)
+    available_purchase_options(coins_to_spend, first_chip_color).max_by { |_chip, cost| cost }
+  end
+
+  def make_multiple_chip_selections
+    return [] unless traits.include? :buys_multiple_if_able
+
+    options = available_purchase_options(coins).sort_by { |_chip, cost| -cost }
+    selection_one = 0
+    selection_two = 1
+
+    while (options[selection_one].first[:color] == options[selection_two].first[:color]) ||
+          (options[selection_one][1] + options[selection_two][1] > coins)
+
+      vocalize "-- Considering #{options[selection_one]} and #{options[selection_two]}..."
+      selection_two += 1
+      next unless selection_two >= options.length
+
+      selection_one += 1
+      selection_two = selection_one + 1
+      return [] if selection_one >= options.length or selection_two >= options.length
+    end
+
+    vocalize "Decided on both #{options[selection_one]} and #{options[selection_two]}"
+    [options[selection_one], options[selection_two]]
+  end
+
+  def available_purchase_options(coins_to_spend, forbidden_color = nil)
     game.ingredient_set.chip_costs.select do |chip, cost|
-      next(vocalize "-- Chip #{chip} color not available") unless game.available_colors.include?(chip[:color])
-      next(vocalize "-- Chip #{chip} color not interesting") unless player_color_interests.include?(chip[:color])
+      unless game.available_colors.include?(chip[:color])
+        next(vocalize "-- Chip #{chip} color not available")
+      end
+      unless player_color_interests.include?(chip[:color])
+        next(vocalize "-- Chip #{chip} color not interesting")
+      end
       next(vocalize "-- Chip #{chip} color already bought") if chip[:color] == forbidden_color
       next(vocalize "-- Chip #{chip} is too expensive at #{cost}") if cost > coins_to_spend
+
       true
     end
   end
@@ -234,7 +272,7 @@ class Player
   def end_game
     vocalize "Ending game with #{coins} coins and #{rubies} rubies..."
     gain_victory_points(coins / 5) unless exploded?
-    gain_victory_points(rubies / 2) if (rubies / 2) > 0
+    gain_victory_points(rubies / 2) if (rubies / 2).positive?
     vocalize "Ending game with #{victory_points} victory points."
     vocalize "Ending game with droplet at #{droplet}."
     reset_bag
@@ -267,12 +305,13 @@ class Player
   def move_droplet(spaces)
     vocalize "- Moved droplet forward #{spaces} spaces."
     @droplet += spaces
+    @droplet = max_board_space if droplet > max_board_space
   end
 
   def add_distance(spaces)
     vocalize "-- Moved current space forward #{spaces} spaces."
     @distance += spaces
-    @distance = 52 if distance > 52
+    @distance = max_board_space if distance > max_board_space
   end
 
   def prepare_flask(prepared)
@@ -315,7 +354,7 @@ class Player
   end
 
   def decided_to_stop?
-    if traits.include?(:begins_buys_with_black_chip) && owned_chips(:black) == 0
+    if traits.include?(:begins_buys_with_black_chip) && owned_chips(:black).zero?
       coins >= game.ingredient_set.chip_costs[{ color: :black, value: 1 }]
     else
       vocalize "-- Determing chance to explode with #{number_of_exploding_chips} / #{bag.length}."
@@ -325,7 +364,7 @@ class Player
   end
 
   def chance_to_explode
-    (number_of_exploding_chips.to_f / bag.length.to_f) * 100.00
+    (number_of_exploding_chips.to_f / bag.length) * 100.00
   end
 
   def number_of_exploding_chips
@@ -344,7 +383,7 @@ class Player
       buys_yellow_chips: :yellow,
       buys_green_chips: :green,
       buys_black_chips: :black,
-      begins_buys_with_black_chip: (owned_chips(:black) > 0 ? nil : :black),
+      begins_buys_with_black_chip: (owned_chips(:black).positive? ? nil : :black),
       buys_purple_chips: :purple
     }.select { |trait, _color| traits.include? trait }.values.uniq.compact
   end
@@ -353,20 +392,13 @@ class Player
     return false if exploded?
     return false unless chip[:color] == :white
 
-    chip_is_worth_using_flask?(chip) || previous_chip_is_worth_using_flask?(chip)
+    chip_is_worth_using_flask?(chip)
   end
 
   def chip_is_worth_using_flask?(chip)
     vocalize '-- Deciding whether to use flask on chip...'
-    # TODO: Implement better logic for how to decide whether to use the flask
+    # TODO: Implement better logic for deciding whether to use the flask
     (chip[:value] > 1 && sum_of_white_chips > 5) || (chip[:value] > 2 && board.length >= bag.length)
-  end
-
-  def previous_chip_is_worth_using_flask?(chip)
-    return false unless traits.include? :buys_yellow_chips
-
-    vocalize '-- Deciding whether to use flask on chip due to previous chip...'
-    previous_chip[:color] == [:white] && previous_chip[:value] > 1
   end
 
   def coins
@@ -374,12 +406,28 @@ class Player
   end
 
   def reset_bag
-    vocalize "- Bag reset."
+    vocalize '- Bag reset.'
     @bag << board.pop until board.empty?
   end
 
   def reset_distance
-    vocalize "- Distance set to #{distance}."
     @distance = droplet
+    vocalize "- Distance set to #{distance}."
+  end
+
+  def max_board_space
+    PLAYER_BOARD_SPACES.length - 2
+  end
+
+  def vocalize_reason_for_stopping
+    if exploded?
+      vocalize '-- Pot exploded; Stopped drawing.'
+    elsif bag.empty?
+      vocalize '-- Empty bag; Stopped drawing.'
+    elsif at_edge_of_board?
+      vocalize '-- Maxed out board; Stopped drawing.'
+    else
+      vocalize '-- Decided to stop drawing due to risk tolerance.'
+    end
   end
 end
